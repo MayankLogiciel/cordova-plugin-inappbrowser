@@ -239,14 +239,26 @@
     // Run later to avoid the "took a long time" log message.
     dispatch_async(dispatch_get_main_queue(), ^{
         if (weakSelf.inAppBrowserViewController != nil) {
-            CGRect frame = [[UIScreen mainScreen] bounds];
-            UIWindow *tmpWindow = [[UIWindow alloc] initWithFrame:frame];
+            BOOL initHidden = NO;
+            float osVersion = [[[UIDevice currentDevice] systemVersion] floatValue];
+            __strong __typeof(weakSelf) strongSelf = weakSelf;
+            if (!strongSelf->tmpWindow) {
+                CGRect frame = [[UIScreen mainScreen] bounds];
+                if(initHidden && osVersion < 11){
+                   frame.origin.x = -10000;
+                }
+                strongSelf->tmpWindow = [[UIWindow alloc] initWithFrame:frame];
+            }
             UIViewController *tmpController = [[UIViewController alloc] init];
-            [tmpWindow setRootViewController:tmpController];
-            [tmpWindow setWindowLevel:UIWindowLevelNormal];
 
-            [tmpWindow makeKeyAndVisible];
-            [tmpController presentViewController:nav animated:YES completion:nil];
+            [strongSelf->tmpWindow setRootViewController:tmpController];
+            [strongSelf->tmpWindow setWindowLevel:UIWindowLevelNormal];
+
+            if(!initHidden || osVersion < 11){
+                [self->tmpWindow makeKeyAndVisible];
+            }
+            
+            [tmpController presentViewController:nav animated:NO completion:nil];
         }
     });
 }
@@ -494,10 +506,14 @@
     // Don't recycle the ViewController since it may be consuming a lot of memory.
     // Also - this is required for the PDF/User-Agent bug work-around.
     self.inAppBrowserViewController = nil;
-
+    
+    // Set tmpWindow to hidden to make main webview responsive to touch again
+    // Based on https://stackoverflow.com/questions/4544489/how-to-remove-a-uiwindow
+    self->tmpWindow.hidden = YES;
+    
     if (IsAtLeastiOSVersion(@"7.0")) {
         if (_previousStatusBarStyle != -1) {
-            [[UIApplication sharedApplication] setStatusBarStyle:_previousStatusBarStyle];
+            [UIApplication sharedApplication].statusBarStyle = _previousStatusBarStyle;
         }
     }
 
@@ -741,7 +757,7 @@
 
     BOOL locationbarVisible = !self.addressLabel.hidden;
 
-    // prevent double show/hide
+    // prevent double /hide
     if (show == !(self.toolbar.hidden)) {
         return;
     }
